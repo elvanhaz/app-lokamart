@@ -1,0 +1,333 @@
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
+import 'dart:convert';
+
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../providers/FavoritProvider.dart';
+import '../providers/OutletProvider.dart';
+
+class FavoritePage extends StatefulWidget {
+  const FavoritePage({super.key});
+
+  @override
+  _FavoritePageState createState() => _FavoritePageState();
+}
+
+class _FavoritePageState extends State<FavoritePage> with TickerProviderStateMixin {
+  final PageController _controller = PageController();
+  double _currentPage = 0.0;
+
+  late AnimationController _rotationController;
+  late AnimationController _blobController;
+  late Animation<double> _blobScale;
+
+  List<dynamic> _favorites = [];
+  String? outletId;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Fetch outletId from OutletProvider
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final outletProvider = Provider.of<OutletProvider>(context, listen: false);
+      setState(() {
+        outletId = outletProvider.outletId;
+      });
+    });
+
+    // Fetch data from API
+    _fetchFavorites();
+
+    // Controller for PageView
+    _controller.addListener(() {
+      setState(() {
+        _currentPage = _controller.page ?? 0.0;
+      });
+    });
+
+    // Animation controller for the blob's "pulsing" effect
+    _blobController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    )..repeat(reverse: true);
+
+    // Blob scale animation
+    _blobScale = Tween<double>(begin: 0.9, end: 1.1).animate(
+      CurvedAnimation(parent: _blobController, curve: Curves.easeInOut),
+    );
+
+    // Animation controller for rotation effect
+    _rotationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 20), // Duration for a full rotation
+    )..repeat(); // Repeats indefinitely
+  }
+
+  Future<void> _fetchFavorites() async {
+    try {
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      String? token = prefs.getString('sanctumToken');
+      if (token == null) {
+        print('Token tidak ditemukan');
+        return;
+      }
+
+      final response = await http.get(
+        Uri.parse('https://loka-mart.demoaplikasi.web.id/api/v1/favorit'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Accept': 'application/json',
+        },
+      );
+      if (response.statusCode == 200) {
+        setState(() {
+          _favorites = json.decode(response.body)['data'];
+        });
+      } else {
+        print('Gagal memuat item. Status code: ${response.statusCode}, Body: ${response.body}');
+      }
+    } catch (e) {
+      print('Terjadi kesalahan: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _blobController.dispose();
+
+    if (_rotationController.isAnimating) {
+      _rotationController.dispose();
+    }
+
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: _favorites.isEmpty
+          ? const Center(child: CircularProgressIndicator())
+          : PageView.builder(
+              controller: _controller,
+              itemCount: _favorites.length,
+              itemBuilder: (context, index) {
+                return _buildPage(index);
+              },
+            ),
+    );
+  }
+
+  Widget _buildPage(int index) {
+    final favorite = _favorites[index];
+
+    List<List<Color>> gradientColors = [
+      [Colors.pink[100]!, Colors.pink[300]!],
+      [Colors.lightBlue[100]!, Colors.lightBlue[300]!],
+      [Colors.green[100]!, Colors.green[300]!],
+      [Colors.orange[100]!, Colors.orange[300]!],
+      [Colors.purple[100]!, Colors.purple[300]!],
+      [Colors.teal[100]!, Colors.teal[300]!],
+      [Colors.yellow[100]!, Colors.yellow[300]!],
+      [Colors.red[100]!, Colors.red[300]!],
+      [Colors.indigo[100]!, Colors.indigo[300]!],
+      [Colors.cyan[100]!, Colors.cyan[300]!],
+    ];
+
+    BoxDecoration backgroundDecoration = BoxDecoration(
+      gradient: LinearGradient(
+        colors: gradientColors[index % gradientColors.length],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+    );
+
+    double delta = index - _currentPage;
+    double rotationY = (delta * 0.6).clamp(-1.0, 1.0);
+    double scale = 1 - (rotationY.abs() * 0.1);
+    double parallaxOffset = (delta * 70).clamp(-70.0, 70.0);
+
+    return Transform(
+      transform: Matrix4.identity()
+        ..setEntry(3, 2, 0.001)
+        ..rotateY(rotationY * 1.2),
+      alignment: Alignment.center,
+      child: Stack(
+        children: [
+          Container(
+            decoration: backgroundDecoration,
+            child: Column(
+              children: [
+                Expanded(
+                  child: Stack(
+                    children: [
+                      Align(
+                        alignment: Alignment.center,
+                        child: AnimatedBuilder(
+                          animation: _blobScale,
+                          builder: (context, child) {
+                            return Transform.scale(
+                              scale: _blobScale.value,
+                              child: Transform.rotate(
+                                angle: delta * 0.2,
+                                child: Image.asset(
+                                  'assets/effect.png',
+                                  width: 350,
+                                  height: 350,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      Align(
+                        alignment: Alignment.topCenter,
+                        child: Transform.translate(
+                          offset: Offset(parallaxOffset, 150),
+                          child: Text(
+                            favorite['nama'],
+                            style: GoogleFonts.poppins(
+                              fontSize: 35,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                      Align(
+                        alignment: Alignment.center,
+                        child: Transform.scale(
+                          scale: scale,
+                          child: RotationTransition(
+                            turns: _rotationController,
+                            child: Image.network(
+                              favorite['gambar'],
+                              width: 250,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
+                  child: AnimatedOpacity(
+                    opacity: _currentPage.round() == index ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 500),
+                    child: Transform.scale(
+                      scale: _currentPage.round() == index ? 1.0 : 0.8,
+                      child: _buildTaskBox(favorite),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        Positioned(
+  top: 30,
+  left: 16,
+  child: GestureDetector(
+    onTap: () {
+      setState(() {
+        // Pastikan qty tidak null, jika null setel ke 0 terlebih dahulu
+        if (favorite['qty'] == null) {
+          favorite['qty'] = 0;
+        }
+        favorite['qty'] += 1; // Lakukan operasi penambahan
+      });
+
+      int qty = favorite['qty'];
+
+      // Pastikan properti 'id_item_menu' dan 'nama' tidak null dengan memberikan nilai default
+      String itemId = favorite['id_item_menu'] ?? '';
+      String itemName = favorite['nama'] ?? 'Item';
+
+      // Panggil metode untuk menambahkan ke keranjang
+      context.read<FavoritProvider>().optimisticAddToCart(
+        itemId,  // Pastikan ini selalu String
+        qty, 
+        outletId!, 
+        favorite,
+      );
+
+      // Tampilkan SnackBar dengan informasi terbaru
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$itemName qty bertambah menjadi ${favorite['qty']}'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    },
+    child: Icon(
+      Icons.add,
+      size: 40,
+      color: Colors.white,
+    ),
+  ),
+),
+
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTaskBox(dynamic favorite) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 8,
+            offset: Offset(2, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(                                  Icons.fastfood,
+                                  size: 24,
+                                  color: Colors.redAccent,
+),
+              const SizedBox(width: 10),
+              Text(
+                favorite['nama'], // Dynamically display item name
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10), // Space between task rows
+          Row(
+            children: [
+              const Icon(                                  Icons.price_change_outlined,
+                                  size: 24,
+                                  color: Colors.orangeAccent,
+),
+              const SizedBox(width: 10),
+              Text(
+                'Harga: ${favorite['alt_harga']}', // Dynamically display item price
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}

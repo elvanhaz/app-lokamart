@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "296950472410",
+    "project_id": "phone-firebase-e0105",
+    "storage_bucket": "phone-firebase-e0105.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:296950472410:android:4a16da219fb9807c0c4fe3",
+        "android_client_info": {
+          "package_name": "com.example.loka"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAyGJL-1sD_-OgiIOHmbpGelqG77AsRTpc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
